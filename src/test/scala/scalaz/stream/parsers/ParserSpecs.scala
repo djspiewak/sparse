@@ -9,7 +9,11 @@ import scalaz.std.anyVal._
 import scalaz.std.string._
 import scalaz.syntax.equal._
 
+import scala.collection.SeqLike
 import scala.collection.generic.CanBuildFrom
+import scala.collection.immutable.StringOps
+
+import scala.util.matching.Regex
 
 object ParserSpecs extends Specification {
   import Parser.{Error, Completed, literalRichParser}
@@ -98,7 +102,7 @@ object ParserSpecs extends Specification {
   }
 
   // TODO this also seems useful...
-  def tokenize[Str[_] <: Seq[_], TokenIn, TokenOut, That <: TraversableOnce[TokenIn \/ TokenOut]](str: Str[TokenIn])(f: Str[TokenIn] => (TokenIn \/ TokenOut, Str[TokenIn]))(implicit cbf: CanBuildFrom[Str[TokenIn], TokenIn \/ TokenOut, That]): That = {
+  def tokenize[Str[_] <: SeqLike[_, _], TokenIn, TokenOut, That <: TraversableOnce[TokenIn \/ TokenOut]](str: Str[TokenIn])(f: Str[TokenIn] => (TokenIn \/ TokenOut, Str[TokenIn]))(implicit cbf: CanBuildFrom[Str[TokenIn], TokenIn \/ TokenOut, That]): That = {
     if (str.isEmpty) {
       cbf().result
     } else {
@@ -108,6 +112,32 @@ object ParserSpecs extends Specification {
       builder += token
       builder ++= tokenize(tail)(f)      // TODO it's never worse, tail-recurse!
       builder.result
+    }
+  }
+
+  // TODO oh look, more useful stuff!
+  def regexTokenize[T](str: String, rules: Map[Regex, List[String] => T]): Seq[Char \/ T] = {
+    def iseqAsCharSeq(seq: IndexedSeq[Char]): CharSequence = new CharSequence {
+      def charAt(i: Int) = seq(i)
+      def length = seq.length
+      def subSequence(start: Int, end: Int) = iseqAsCharSeq(seq.slice(start, end))
+      override def toString = seq.mkString
+    }
+
+    tokenize[IndexedSeq, Char, T, Seq[Char \/ T]](str) { seq =>
+      val str = iseqAsCharSeq(seq)
+
+      // find the "first" regex that matches and apply its transform
+      val tokenM: Option[(T, IndexedSeq[Char])] = rules collectFirst {
+        case (regex, f) if (regex findPrefixMatchOf str).isDefined => {
+          val m = (regex findPrefixMatchOf str).get
+          (f(m.subgroups), m.after.toString: IndexedSeq[Char])
+        }
+      }
+
+      tokenM map {
+        case (token, tail) => (\/-(token), tail)
+      } getOrElse ((-\/(seq.head), seq.tail))
     }
   }
 
