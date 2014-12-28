@@ -1,10 +1,13 @@
 package scalaz.stream
 package parsers
 
+import org.specs2.matcher.Matcher
 import org.specs2.mutable._
 
 import scalaz._
 import scalaz.std.anyVal._
+import scalaz.std.string._
+import scalaz.syntax.equal._
 
 object ParserSpecs extends Specification {
   import Parser.{Error, Completed, literalRichParser}
@@ -12,26 +15,17 @@ object ParserSpecs extends Specification {
   "terminal parsers" should {
     "parse the empty string" in {
       val epsilon: Parser[Char, Unit] = Parser.completed(())
-
-      parse(epsilon)("") must beLike {
-        case \/-(Completed(())) => ok
-      }
+      epsilon must parseComplete("").as(())
     }
 
     "parse a single token" in {
       val a: Parser[Char, Char] = 'a'
-
-      parse(a)("a") must beLike {
-        case \/-(Completed(c)) => c mustEqual 'a'
-      }
+      a must parseComplete("a").as('a')
     }
 
     "produce an error when so defined" in {
       val e: Parser[Char, Unit] = Parser.error("oogly boogly")
-
-      parse(e)("fubar") must beLike {
-        case -\/(Error(str)) => str mustEqual "oogly boogly"
-      }
+      e must parseError("fubar").as("oogly boogly")
     }
   }
 
@@ -42,21 +36,15 @@ object ParserSpecs extends Specification {
     )
 
     "parse the empty string" in {
-      parse(grammar)("") must beLike {
-        case \/-(Completed(n)) => n mustEqual 0
-      }
+      grammar must parseComplete("").as(0)
     }
 
     "parse a single set of parentheses" in {
-      parse(grammar)("()") must beLike {
-        case \/-(Completed(n)) => n mustEqual 1
-      }
+      grammar must parseComplete("()").as(1)
     }
 
     "parse four nested sets of parentheses" in {
-      parse(grammar)("(((())))") must beLike {
-        case \/-(Completed(n)) => n mustEqual 4
-      }
+      grammar must parseComplete("(((())))").as(4)
     }
   }
 
@@ -76,5 +64,49 @@ object ParserSpecs extends Specification {
     }
 
     inner(str)(parser) eval Parser.Cache[Char]
+  }
+
+  //
+  // custom matchers
+  //
+
+  def parseComplete(str: String) = new {
+    def as[R: Equal](result: R): Matcher[Parser[Char, R]] = {
+      def body(parser: Parser[Char, R]) = {
+        parse(parser)(str) match {
+          case \/-(Completed(r)) => r === result
+          case -\/(_) => false
+        }
+      }
+
+      def error(parser: Parser[Char, R]) = parse(parser)(str) match {
+        case -\/(Error(str)) => Some(str)
+        case \/-(_) => None
+      }
+
+      (body _,
+        Function.const("parses successfully") _,
+        { str: Parser[Char, R] => s"produces error: ${error(str).get}" })
+    }
+  }
+
+  def parseError(str: String) = new {
+    def as[R](msg: String): Matcher[Parser[Char, R]] = {
+      def body(parser: Parser[Char, R]) = {
+        parse(parser)(str) match {
+          case \/-(Completed(r)) => false
+          case -\/(Error(msg2)) => msg === msg2
+        }
+      }
+
+      def error(parser: Parser[Char, R]) = parse(parser)(str) match {
+        case -\/(Error(msg2)) => s"produced error '$msg2' and not '$msg'"
+        case \/-(_) => "completed and did not error"
+      }
+
+      (body _,
+        Function.const(s"produces error $msg") _,
+        error _)
+    }
   }
 }
