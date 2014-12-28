@@ -6,6 +6,49 @@ import scalaz.syntax.equal._
 import scalaz.syntax.monad._
 import scalaz.syntax.show._
 
+/**
+ * Applicative (not monadic!) parser interface defined by two functions (simplified types):
+ *
+ * - `complete: Error \/ Completed`
+ * - `derive: State[Cache, Parser]`
+ *
+ * The `derive` function is only defined on parsers of the subtype, `Incomplete`.  The `complete`
+ * function is defined on all parsers, where the following axioms hold:
+ *
+ * - `complete Completed = \/-(Completed)`
+ * - `complete Error = -\/(Error)`
+ * - `complete Incomplete = ???`
+ *
+ * Which is to say that an "Incomplete" parser may be completable, but is also guaranteed to have
+ * potential subsequent derivations.  A "Complete" or "Error" parser do not have any further
+ * derivations, but their completeness is guaranteed.  An example of an incomplete parser that has
+ * subsequent possible derivations but is still completeable is the following:
+ *
+ * lazy val parens = (
+ *     '(' ~ parens ~ ')'
+ *   | completed
+ * )
+ *
+ * The `parens` parser may be completed immediately, since it contains a production for the empty
+ * string.  However, it may also be derived, and the only valid derivation for it is over the '('
+ * token.  The resulting parser from that derivation *cannot* be completed, since it would require
+ * a matching paren in order to represent a valid input.
+ *
+ * A parser which starts as Incomplete and then becomes either Completed or Error might be something
+ * like the following:
+ *
+ * lazy val foo = token('a')
+ *
+ * The `foo` parser is Incomplete and not completable (it contains no production for the empty string).
+ * However, it may be derived over the token 'a' to produce a Completed parser (which will actually
+ * be of runtime type Completed).  If it is derived over any other token, it will produce an Error
+ * parser.
+ *
+ * Thus, unlike many parser combinators encodings, this one encodes the result algebra directly in
+ * the parser itself.  This has several advantages from a usability standpoint.  It does, however,
+ * make the encoding somewhat convoluted in a few places from an implementation standpoint.  Hopefully
+ * those convolutions do not leak into user space...
+ */
 sealed trait Parser[Token, Result] {
 
   /**
@@ -37,7 +80,7 @@ sealed trait Parser[Token, Result] {
 object Parser {
 
   // yep, indexing on value identity LIKE A BOSS
-  type Cache[Token] = KMap[({ type λ[α] = (Token, Parser[Token, α]) })#λ, ({ type λ[α] = Parser[Token, α] })#λ]
+  type Cache[Token] = KMap[({ type λ[α] = (Token, Parser[Token, α]) })#λ, ({ type λ[α] = () => Parser[Token, α] })#λ]
 
   // it's somewhat important that these functions be lazy
   implicit class RichParser[Token, Result](left: => Parser[Token, Result]) {
@@ -122,14 +165,32 @@ object Parser {
 
     protected def innerComplete[R](seen: Set[Parser[Token, _]]): Error[Token, R] \/ Completed[Token, Result]
 
-    // progress the parse over one token
-    final def derive(t: Token): State[Cache[Token], Parser[Token, Result]] = for {
-      cache <- State.get[Cache[Token]]
-      back <- cache get (t -> this) map { State.state[Cache[Token], Parser[Token, Result]](_) } getOrElse innerDerive(t)
+    /**
+     * Progresses the parse over a single token and returns the continuation (as a parser).  Note that
+     * the cache carried in the state monad is very important and must be preserved for the duration
+     * of an uncompletable parse.  Once a parser resulting from this derivation is completable, that
+     * completion may be invoked and the state dropped.  Dropping state in the middle of an incomplete
+     * parse will yield unsound results and possibly divergent parse trails!
+     *
+     * As the parametricity implies, this derivation function does not advance the parse over anything
+     * more than a single token, even if that single token taken in context with the state of the
+     * parse coming in cannot yield a valid output.  For example, imagine a parser for matching
+     * parentheses.  One could advance the parser over a token representing '('.  This could not
+     * possibly yield a completable parser, since it is impossible for a correctly formed parentheses
+     * grammar to find a match for a newly-opened parenthetical.  However, the derivation function
+     * will still return immediately after consuming the '(' token.  The resulting parser can be used
+     * to advance over subsequent tokens, but cannot be completed then-and-there (attempting to do
+     * so would result in an Error).
+     */
+    final def derive(t: Token): State[Cache[Token], Parser[Token, Result]] = State { cache =>
+      // derived needs to be in the cache which is used in its derivation, otherwise direct recursion diverges
+      lazy val (cache3: Cache[Token], derived: Parser[Token, Result]) = innerDerive(t).run(cache2)
+      lazy val cache2: Cache[Token] = cache + ((t, this) -> { () => derived })
 
-      cache2 = cache + ((t, this) -> back)
-      _ <- State.put(cache2)
-    } yield back
+      // if we've already derived, we have the contents of cache3 -- cache2 inside of cache
+      // if we haven't derived, then cache3 contains all the contents of cache2 -- cache
+      cache get (t -> this) map { thunk => (cache, thunk()) } getOrElse (cache3, derived)
+    }
 
     protected def innerDerive(candidate: Token): State[Cache[Token], Parser[Token, Result]]
   }
@@ -164,7 +225,7 @@ private[parsers] class SeqParser[Token, LR, RR](_left: => Parser[Token, LR], _ri
       left.complete(Set()).toOption map {
         case Completed(lr) => {
           for {
-            lp <- left derive t       // TODO insufficiently lazy!  when this is an error, the LEFT side should be an error, not the whole thing
+            lp <- left derive t
             rp <- right derive t
           } yield lp ~ right | (rp map { (lr, _) })
         }
@@ -210,6 +271,6 @@ private[parsers] class UnionParser[Token, Result](_left: => Parser[Token, Result
     case (left: Incomplete[Token, Result], right: Incomplete[Token, Result]) => for {
       lp <- left derive t
       rp <- right derive t
-    } yield lp | rp         // TODO this value needs to be in the Cache[Token] *before* we recurse
+    } yield lp | rp
   }
 }
