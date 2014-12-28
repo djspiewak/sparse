@@ -37,7 +37,7 @@ import scalaz.syntax.show._
  * A parser which starts as Incomplete and then becomes either Completed or Error might be something
  * like the following:
  *
- * lazy val foo = token('a')
+ * lazy val foo = literal('a')
  *
  * The `foo` parser is Incomplete and not completable (it contains no production for the empty string).
  * However, it may be derived over the token 'a' to produce a Completed parser (which will actually
@@ -82,6 +82,38 @@ object Parser {
   // yep, indexing on value identity LIKE A BOSS
   type Cache[Token] = KMap[({ type λ[α] = (Token, Parser[Token, α]) })#λ, ({ type λ[α] = () => Parser[Token, α] })#λ]
 
+  /**
+   * Parser for the empty string, producing a given result.
+   */
+  def completed[Token, Result](r: Result): Parser[Token, Result] = Completed(r)
+
+  /**
+   * Parser that is already in the error state.  Generally speaking, this is probably
+   * only useful for internal plumbing.
+   */
+  def error[Token, Result](msg: String): Parser[Token, Result] = Error(msg)
+
+  /**
+   * Parser for a single literal token, producing that token as a result.  Parametricity!
+   */
+  implicit def literal[Token: Equal: Show](token: Token): Parser[Token, Token] = new Incomplete[Token, Token] {
+
+    def innerComplete[R](seen: Set[Parser[Token, _]]) = -\/(Error(s"unexpected end of stream; expected ${token.shows}"))
+
+    def innerDerive(candidate: Token) = {
+      val result: Parser[Token, Token] = if (candidate === token)
+        completed(token)
+      else
+        error(s"expected ${token.shows}, got ${candidate.shows}")
+
+      State state result
+    }
+  }
+
+  //
+  // syntax
+  //
+
   // it's somewhat important that these functions be lazy
   implicit class RichParser[Token, Result](left: => Parser[Token, Result]) {
 
@@ -98,20 +130,60 @@ object Parser {
       new UnionParser(left, right)
   }
 
-  def completed[Token, Result](r: Result): Parser[Token, Result] = Completed(r)
-  def error[Token, Result](msg: String): Parser[Token, Result] = Error(msg)
+  implicit class Caret1[Token, Result](self: Parser[Token, Result]) {
 
-  def literal[Token: Equal: Show](token: Token): Parser[Token, Token] = new Incomplete[Token, Token] {
+    /**
+     * Alias for map
+     */
+    def ^^[Result2](f: Result => Result2): Parser[Token, Result2] = self map f
+  }
 
-    def innerComplete[R](seen: Set[Parser[Token, _]]) = -\/(Error(s"unexpected end of stream; expected ${token.shows}"))
+  implicit class Caret2[Token, A, B](self: Parser[Token, A ~ B]) {
 
-    def innerDerive(candidate: Token) = {
-      val result: Parser[Token, Token] = if (candidate === token)
-        completed(token)
-      else
-        error(s"expected ${token.shows}, got ${candidate.shows}")
+    def ^^[Z](f: (A, B) => Z): Parser[Token, Z] = self map {
+      case a ~ b => f(a, b)
+    }
+  }
 
-      State state result
+  implicit class Caret3L[Token, A, B, C](self: Parser[Token, (A ~ B) ~ C]) {
+
+    def ^^[Z](f: (A, B, C) => Z): Parser[Token, Z] = self map {
+      case (a ~ b) ~ c => f(a, b, c)
+    }
+  }
+
+  implicit class Caret3R[Token, A, B, C](self: Parser[Token, A ~ (B ~ C)]) {
+
+    def ^^[Z](f: (A, B, C) => Z): Parser[Token, Z] = self map {
+      case a ~ (b ~ c) => f(a, b, c)
+    }
+  }
+
+  implicit class Caret4LL[Token, A, B, C, D](self: Parser[Token, ((A ~ B) ~ C) ~ D]) {
+
+    def ^^[Z](f: (A, B, C, D) => Z): Parser[Token, Z] = self map {
+      case ((a ~ b) ~ c) ~ d => f(a, b, c, d)
+    }
+  }
+
+  implicit class Caret4LR[Token, A, B, C, D](self: Parser[Token, (A ~ (B ~ C)) ~ D]) {
+
+    def ^^[Z](f: (A, B, C, D) => Z): Parser[Token, Z] = self map {
+      case (a ~ (b ~ c)) ~ d => f(a, b, c, d)
+    }
+  }
+
+  implicit class Caret4RL[Token, A, B, C, D](self: Parser[Token, A ~ ((B ~ C) ~ D)]) {
+
+    def ^^[Z](f: (A, B, C, D) => Z): Parser[Token, Z] = self map {
+      case a ~ ((b ~ c) ~ d) => f(a, b, c, d)
+    }
+  }
+
+  implicit class Caret4RR[Token, A, B, C, D](self: Parser[Token, A ~ (B ~ (C ~ D))]) {
+
+    def ^^[Z](f: (A, B, C, D) => Z): Parser[Token, Z] = self map {
+      case a ~ (b ~ (c ~ d)) => f(a, b, c, d)
     }
   }
 
