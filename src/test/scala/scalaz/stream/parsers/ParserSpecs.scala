@@ -66,11 +66,11 @@ object ParserSpecs extends Specification {
     }
   }
 
-  "arithmetic evaluation" should {
+  "an expression evaluator" should {
     sealed trait ExprToken
 
     object ExprToken {
-      case class Num(n: Int) extends ExprToken
+      final case class Num(n: Int) extends ExprToken
 
       case object Plus extends ExprToken
       case object Minus extends ExprToken
@@ -80,6 +80,57 @@ object ParserSpecs extends Specification {
       case object LParen extends ExprToken
       case object RParen extends ExprToken
     }
+
+    implicit def exprTokenEq[T <: ExprToken]: Equal[T] = Equal.equalA      // because I'm lazy
+    implicit def exprTokenShow[T <: ExprToken]: Show[T] = Show.showA       // ditto!
+
+    import ExprToken._
+
+    val rules: Map[Regex, List[String] => ExprToken] = Map(
+      """\s*(\d+)""".r -> { case ns :: Nil => Num(ns.toInt) },
+
+      """\s*\+""".r -> { _ => Plus },
+      """\s*-""".r -> { _ => Minus },
+      """\s*\*""".r -> { _ => Times },
+      """\s*/""".r -> { _ => Div },
+
+      """\s*\(""".r -> { _ => LParen },
+      """\s*\)""".r -> { _ => RParen })
+
+    def exprTokenize(str: String): Seq[ExprToken] =
+      regexTokenize(str, rules) collect { case \/-(et) => et }
+
+    // %%
+
+    lazy val expr: Parser[ExprToken, Int] = (
+        expr ~ Times ~ term ^^ { (e1, _, e2) => e1 * e2 }
+      | expr ~ Div ~ term   ^^ { (e1, _, e2) => e1 / e2 }
+      | term
+    )
+
+    lazy val term: Parser[ExprToken, Int] = (
+        term ~ Plus ~ value  ^^ { (e1, _, e2) => e1 + e2 }
+      | term ~ Minus ~ value ^^ { (e1, _, e2) => e1 - e2 }
+      | value
+    )
+
+    // type inference and invariance sort of failed me here...
+    lazy val value: Parser[ExprToken, Int] = (
+        (LParen: Parser[ExprToken, ExprToken]) ~> expr <~ RParen
+      | (Num(42): Parser[ExprToken, ExprToken]) ^^ { _ => 42 }     // TODO expanded literal support
+    )
+
+    // %%
+
+    "tokenize a number" in {
+      exprTokenize("42") mustEqual Seq(Num(42))
+    }
+
+    "parse a number" in {
+      expr must parseComplete(exprTokenize("42")).as(42)
+    }
+
+    // TODO more expr tests
   }
 
   // TODO maybe move this to a Util object?  seems useful
@@ -124,7 +175,7 @@ object ParserSpecs extends Specification {
       override def toString = seq.mkString
     }
 
-    tokenize[IndexedSeq, Char, T, Seq[Char \/ T]](str) { seq =>
+    tokenize(str: IndexedSeq[Char]) { seq =>
       val str = iseqAsCharSeq(seq)
 
       // find the "first" regex that matches and apply its transform

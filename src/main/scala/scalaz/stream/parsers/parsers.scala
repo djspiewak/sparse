@@ -124,6 +124,9 @@ object Parser {
   // it's somewhat important that these functions be lazy
   implicit class RichParser[Token, Result](left: => Parser[Token, Result]) {
 
+    // alias for map
+    def ^^[Result2](f: Result => Result2): Parser[Token, Result2] = left map f
+
     def ~>[Result2](right: => Parser[Token, Result2]): Parser[Token, Result2] =
       left ~ right ^^ { (_, r) => r }
 
@@ -141,14 +144,6 @@ object Parser {
 
     def orElse(right: => Parser[Token, Result]): Parser[Token, Result] =
       new UnionParser(left, right)
-  }
-
-  implicit class Caret1[Token, Result](self: Parser[Token, Result]) {
-
-    /**
-     * Alias for map
-     */
-    def ^^[Result2](f: Result => Result2): Parser[Token, Result2] = self map f
   }
 
   implicit class Caret2[Token, A, B](self: Parser[Token, A ~ B]) {
