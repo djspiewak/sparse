@@ -46,6 +46,18 @@ object ParserSpecs extends Specification {
     "parse four nested sets of parentheses" in {
       grammar must parseComplete("(((())))").as(4)
     }
+
+    "fail to parse a single mismatched paren" in {
+      grammar must parseError("(").as("unexpected end of stream; expected )")
+    }
+
+    "fail to parse three mismatched parens with one match" in {
+      grammar must parseError("(((()").as("unexpected end of stream; expected )")
+    }
+
+    "fail to parse a mismatched closing paren" in {
+      grammar must parseError(")").as("expected (, got )")
+    }
   }
 
   def parse[R](parser: Parser[Char, R])(str: String): Error[Char, R] \/ Completed[Char, R] = {
