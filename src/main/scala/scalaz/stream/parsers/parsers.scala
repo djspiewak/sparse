@@ -117,6 +117,12 @@ object Parser {
   // it's somewhat important that these functions be lazy
   implicit class RichParser[Token, Result](left: => Parser[Token, Result]) {
 
+    def ~>[Result2](right: => Parser[Token, Result2]): Parser[Token, Result2] =
+      left ~ right ^^ { (_, r) => r }
+
+    def <~[Result2](right: => Parser[Token, Result2]): Parser[Token, Result] =
+      left ~ right ^^ { (l, _) => l }
+
     // alias for andThen
     def ~[Result2](right: => Parser[Token, Result2]) = andThen(right)
 
