@@ -82,6 +82,9 @@ object Parser {
   // yep, indexing on value identity LIKE A BOSS
   type Cache[Token] = KMap[({ type λ[α] = (Token, Parser[Token, α]) })#λ, ({ type λ[α] = () => Parser[Token, α] })#λ]
 
+  // creates an empty cache
+  def Cache[Token] = KMap[({ type λ[α] = (Token, Parser[Token, α]) })#λ, ({ type λ[α] = () => Parser[Token, α] })#λ]()
+
   /**
    * Parser for the empty string, producing a given result.
    */
@@ -113,6 +116,10 @@ object Parser {
   //
   // syntax
   //
+
+  // implicit chaining for literal syntax
+  implicit def literalRichParser[Token: Equal: Show](token: Token): RichParser[Token, Token] =
+    new RichParser(literal(token))
 
   // it's somewhat important that these functions be lazy
   implicit class RichParser[Token, Result](left: => Parser[Token, Result]) {
