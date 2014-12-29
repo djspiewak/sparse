@@ -264,12 +264,12 @@ object Parser {
      */
     final def derive(t: Token): State[Cache[Token], Parser[Token, Result]] = State { cache =>
       // derived needs to be in the cache which is used in its derivation, otherwise direct recursion diverges
-      lazy val (cache3: Cache[Token], derived: Parser[Token, Result]) = innerDerive(t).run(cache2)
+      lazy val pair @ (cache3: Cache[Token], derived: Parser[Token, Result]) = innerDerive(t).run(cache2)
       lazy val cache2: Cache[Token] = cache + ((t, this) -> { () => derived })
 
       // if we've already derived, we have the contents of cache3 -- cache2 inside of cache
       // if we haven't derived, then cache3 contains all the contents of cache2 -- cache
-      cache get (t -> this) map { thunk => (cache, thunk()) } getOrElse (cache3, derived)
+      cache get (t -> this) map { thunk => (cache, thunk()) } getOrElse pair
     }
 
     protected def innerDerive(candidate: Token): State[Cache[Token], Parser[Token, Result]]
@@ -348,9 +348,14 @@ private[parsers] class UnionParser[Token, Result](_left: => Parser[Token, Result
     case (Error(_) | Completed(_), right: Incomplete[Token, Result]) => right derive t
     case (left: Incomplete[Token, Result], Error(_) | Completed(_)) => left derive t
 
-    case (left: Incomplete[Token, Result], right: Incomplete[Token, Result]) => for {
-      lp <- left derive t
-      rp <- right derive t
-    } yield lp | rp
+    case (left: Incomplete[Token, Result], right: Incomplete[Token, Result]) => State { cache =>
+      lazy val (cache3, lp) = left derive t run cache2
+      lazy val (cache4, rp) = right derive t run cache3
+
+      lazy val back: Parser[Token, Result] = lp | rp
+      lazy val cache2: Cache[Token] = cache + ((t, this) -> { () => back })
+
+      (cache4, lp | rp)
+    }
   }
 }
