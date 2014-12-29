@@ -113,6 +113,20 @@ object Parser {
     }
   }
 
+  def pattern[Token: Show, Result](pf: PartialFunction[Token, Result]): Parser[Token, Result] = new Incomplete[Token, Result] {
+
+    def innerComplete[R](seen: Set[Parser[Token, _]]) = -\/(Error(s"unexpected end of stream"))
+
+    def innerDerive(candidate: Token) = {
+      val result: Parser[Token, Result] = if (pf isDefinedAt candidate)
+        completed(pf(candidate))
+      else
+        error(s"${candidate.shows} did not match the expected pattern")
+
+      State state result
+    }
+  }
+
   //
   // syntax
   //

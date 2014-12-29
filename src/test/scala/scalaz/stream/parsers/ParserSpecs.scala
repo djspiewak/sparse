@@ -103,21 +103,21 @@ object ParserSpecs extends Specification {
     // %%
 
     lazy val expr: Parser[ExprToken, Int] = (
-        expr ~ Times ~ term ^^ { (e1, _, e2) => e1 * e2 }
-      | expr ~ Div ~ term   ^^ { (e1, _, e2) => e1 / e2 }
+        expr ~ Plus ~ term  ^^ { (e1, _, e2) => e1 + e2 }
+      | expr ~ Minus ~ term ^^ { (e1, _, e2) => e1 - e2 }
       | term
     )
 
     lazy val term: Parser[ExprToken, Int] = (
-        term ~ Plus ~ value  ^^ { (e1, _, e2) => e1 + e2 }
-      | term ~ Minus ~ value ^^ { (e1, _, e2) => e1 - e2 }
+        term ~ Times ~ value ^^ { (e1, _, e2) => e1 * e2 }
+      | term ~ Div ~ value   ^^ { (e1, _, e2) => e1 / e2 }
       | value
     )
 
     // type inference and invariance sort of failed me here...
     lazy val value: Parser[ExprToken, Int] = (
         (LParen: Parser[ExprToken, ExprToken]) ~> expr <~ RParen
-      | (Num(42): Parser[ExprToken, ExprToken]) ^^ { _ => 42 }     // TODO expanded literal support
+      | (Parser pattern { case Num(n) => n })
     )
 
     // %%
@@ -128,6 +128,19 @@ object ParserSpecs extends Specification {
 
     "parse a number" in {
       expr must parseComplete(exprTokenize("42")).as(42)
+      expr must parseComplete(exprTokenize("12")).as(12)
+    }
+
+    "parse a simple addition expression" in {
+      expr must parseComplete(exprTokenize("1 + 2")).as(3)
+    }
+
+    "parse a complex composition of all four operators" in {
+      expr must parseComplete(exprTokenize("228 * 4 + 12")).as(924)
+      expr must parseComplete(exprTokenize("123 + 228 * 4 + 12")).as(1047)
+      expr must parseComplete(exprTokenize("123 - 2 + 228 * 4 + 12")).as(1045)
+      expr must parseComplete(exprTokenize("123 - 2 + 228 * 4 + 12 / 4 + 79")).as(1115)
+      expr must parseComplete(exprTokenize("123 - 2 + 228 * 4 + 12 / 4 + 79 * 5")).as(1431)
     }
 
     // TODO more expr tests
@@ -206,13 +219,13 @@ object ParserSpecs extends Specification {
       }
 
       def error(parser: Parser[T, R]) = parse(parser)(str) match {
-        case -\/(Error(str)) => Some(str)
-        case \/-(_) => None
+        case -\/(Error(str)) => s"produces error: $str"
+        case \/-(Completed(r)) => s"produces result $r rather than expected $result"
       }
 
       (body _,
         Function.const("parses successfully") _,
-        { str: Parser[T, R] => s"produces error: ${error(str).get}" })
+        error _)
     }
   }
 
