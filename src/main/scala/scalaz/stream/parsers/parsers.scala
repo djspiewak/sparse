@@ -262,15 +262,17 @@ object Parser {
      * to advance over subsequent tokens, but cannot be completed then-and-there (attempting to do
      * so would result in an Error).
      */
-    final def derive(t: Token): State[Cache[Token], Parser[Token, Result]] = State { cache =>
-      // derived needs to be in the cache which is used in its derivation, otherwise direct recursion diverges
-      lazy val pair @ (cache3: Cache[Token], derived: Parser[Token, Result]) = innerDerive(t).run(cache2)
-      lazy val cache2: Cache[Token] = cache + ((t, this) -> { () => derived })
+    final def derive(t: Token): State[Cache[Token], Parser[Token, Result]] = for {
+      cache <- State.get[Cache[Token]]
+      derived <- cache get (t -> this) map { thunk => State.state[Cache[Token], Parser[Token, Result]](thunk()) } getOrElse {
+        for {
+          derived <- innerDerive(t)
 
-      // if we've already derived, we have the contents of cache3 -- cache2 inside of cache
-      // if we haven't derived, then cache3 contains all the contents of cache2 -- cache
-      cache get (t -> this) map { thunk => (cache, thunk()) } getOrElse pair
-    }
+          cache2 <- State.get[Cache[Token]]
+          _ <- State put (cache2 + ((t, this) -> { () => derived }))
+        } yield derived
+      }
+    } yield derived
 
     protected def innerDerive(candidate: Token): State[Cache[Token], Parser[Token, Result]]
   }
