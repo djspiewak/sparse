@@ -290,6 +290,18 @@ object Parser {
 
     protected def innerDerive(candidate: Token): State[Cache[Token], Parser[Token, Result]]
   }
+
+  //
+  // typeclasses
+  //
+
+  implicit def parserInstance[T]: Applicative[({ type λ[α] = Parser[T, α] })#λ] = new Applicative[({ type λ[α] = Parser[T, α] })#λ] {
+
+    def point[A](a: => A): Parser[T, A] = completed(a)
+
+    def ap[A, B](fa: => Parser[T, A])(f: => Parser[T, A => B]): Parser[T, B] =
+      fa ~ f ^^ { (a, f) => f(a) }
+  }
 }
 
 private[parsers] class SeqParser[Token, LR, RR](_left: => Parser[Token, LR], _right: => Parser[Token, RR]) extends Parser.Incomplete[Token, LR ~ RR] {
