@@ -3,7 +3,7 @@
 This library provides combinators for fully general (any CFG!), fully incremental parsing on top of [scalaz-stream](https://github.com/scalaz/scalaz-stream).  An example:
 
 ```scala
-import scalaz.syntax.anyVal._
+import scalaz.std.anyVal._
 
 import scalaz.stream._
 import scalaz.stream.parsers._
