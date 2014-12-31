@@ -4,8 +4,6 @@ organization := "com.codecommit"
 
 name := "stream-parsers"
 
-version in ThisBuild := "0.1-SNAPSHOT"
-
 scalaVersion := "2.11.4"
 
 resolvers += "Scalaz Bintray Repo" at "http://dl.bintray.com/scalaz/releases"
@@ -26,6 +24,7 @@ publishMavenStyle := true
 
 versionWithGit
 
-git.baseVersion := "0.1"
+// I prefer not to hinder my creativity by predicting the future
+git.baseVersion := "master"
 
 bintraySettings
