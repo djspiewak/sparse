@@ -25,6 +25,22 @@ The parsing algorithm is independent of the algorithm which drives the evaluatio
 
 Clone the repository and build the SBT project.  At the very least, you should be able to get a REPL and poke around with some things (scalaz and scalaz-stream will be on the classpath).  If this doesn't work, uh… yell at me on twitter, or something.
 
+### SBT
+
+If you feel adventurous (or perhaps, less adventurous), you can use a snapshot release pushed to [Bintray](https://bintray.com).  The following incantation in your `build.sbt` should do the trick:
+
+```sbt
+resolvers += "djspiewak's bintray" at "http://dl.bintray.com/djspiewak/maven"
+
+libraryDependencies += "com.codecommit" %% "sparse" % [version]
+```
+
+The specific value of `[version]` is variable.  Snapshot releases are pushed with the convention "`master-[git hash]`" (for example: `master-d7b3dca02082e0d181f2c54c1c72d2dc0a7ce358`).  Full releases are tagged in Git and their version number is used in the release (e.g. the tag `v0.2` would correspond to version `0.2`).  You can always [browse the Bintray repository](https://bintray.com/djspiewak/maven/sparse/view) to see what is available and when it was pushed.
+
+Sparse is currently dependent on Scala 2.11, and so no cross-builds have been published for 2.10.  Sparse is also like, a day old, so no full releases have been published as of 31/12/2014.
+
+Releases are always signed by [Daniel Spiewak](https://keybase.io/djspiewak) (`3587 7FB3 2BAE 5960`).  Practice good Maven artifact hygene!  Import the trusted public key and use the `check-pgp-signatures` task provided by sbt-pgp to ensure the validity of the JARs you're chucking onto your classpath.
+
 ## Parser Construction
 
 A combinatorial DSL is provided for constructing new instances of `Parser`.  The following familiar combinators are implemented:
