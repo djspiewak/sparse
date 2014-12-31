@@ -1,8 +1,10 @@
+import com.typesafe.sbt.SbtGit._
+
 organization := "com.codecommit"
 
 name := "stream-parsers"
 
-version := "0.1-SNAPSHOT"
+version in ThisBuild := "0.1-SNAPSHOT"
 
 scalaVersion := "2.11.4"
 
@@ -17,3 +19,13 @@ libraryDependencies ++= Seq(
 scalacOptions in Test ++= Seq("-Yrangepos")
 
 logBuffered in Test := false
+
+licenses += ("Apache-2.0", url("http://www.apache.org/licenses/"))
+
+publishMavenStyle := true
+
+versionWithGit
+
+git.baseVersion := "0.1"
+
+bintraySettings
