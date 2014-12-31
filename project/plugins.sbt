@@ -1,10 +1,8 @@
 resolvers ++= Seq(
-    Resolver.url(
-      "bintray-sbt-plugin-releases",
-      url("http://dl.bintray.com/content/sbt/sbt-plugin-releases")
-    )(Resolver.ivyStylePatterns)
-  , "jgit-repo" at "http://download.eclipse.org/jgit/maven"
-)
+  Resolver.url(
+    "bintray-sbt-plugin-releases",
+    url("http://dl.bintray.com/content/sbt/sbt-plugin-releases"))(Resolver.ivyStylePatterns),
+  "jgit-repo" at "http://download.eclipse.org/jgit/maven")
 
 addSbtPlugin("me.lessis" % "bintray-sbt" % "0.1.2")
 
