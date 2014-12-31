@@ -110,3 +110,7 @@ There is a proof sketch that derivative parsing is in fact *inherently* exponent
 ## Ongoing
 
 Uh, I'm still working on stuff.  The test suite is about the furthest you can get from "comprehensive" and still have any self respect.  I want to extend the `parse` evaluator a bit to allow for non-greedy strategies (the greedy strategy has some disadvantages, especially with suffix terms).  Performance is probably somewhere between "awful" and "Ctrl-C", so keep that in mind if you play with things.
+
+## Legal
+
+This project (and all contributions) are licensed under the Apache License v2.0.  Copyright is held by Daniel Spiewak, just to avoid insanity, confusion and despair.  Opening a pull request implies that you agree to license your contributions under the Apache License v2.0.  Don't open a pull request if you don't know what this means.  For more details, see the `LICENSE.txt` file.
