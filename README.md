@@ -1,4 +1,4 @@
-# Incremental Parsing for scalaz-stream
+# sparse
 
 This library provides combinators for fully general (any CFG!), fully incremental parsing on top of [scalaz-stream](https://github.com/scalaz/scalaz-stream).  An example:
 

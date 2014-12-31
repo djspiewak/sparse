@@ -18,7 +18,7 @@ import com.typesafe.sbt.SbtGit._
 
 organization := "com.codecommit"
 
-name := "stream-parsers"
+name := "sparse"
 
 scalaVersion := "2.11.4"
 
