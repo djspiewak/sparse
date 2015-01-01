@@ -19,6 +19,8 @@ package scalaz.stream
 import scalaz._
 import scalaz.syntax.show._
 
+import scala.util.matching.Regex
+
 package object parsers {
   import Process._
 
@@ -82,5 +84,62 @@ package object parsers {
 
     // parse as much as we can, restarting with each completed parse
     (inner(parser) eval Cache[Token]) ++ parse(parser)
+  }
+
+  /**
+   * Somewhat-inefficiently (but usefully!) tokenizes an input stream of characers into
+   * a stream of tokens given a set of regular expressions and mapping functions.  Note
+   * that the resulting process will have memory usage which is linearly proportional to
+   * the longest *invalid* substring, so…be careful.  There are better ways to implement
+   * this function.  MUCH better ways.
+   */
+  def tokenize[T](rules: Map[Regex, PartialFunction[List[String], T]], whitespace: Option[Regex] = Some("""\s+""".r)): Process1[Char, Char \/ T] = {
+    import Process._
+
+    def iseqAsCharSeq(seq: IndexedSeq[Char]): CharSequence = new CharSequence {
+      def charAt(i: Int) = seq(i)
+      def length = seq.length
+      def subSequence(start: Int, end: Int) = iseqAsCharSeq(seq.slice(start, end))
+      override def toString = seq.mkString
+    }
+
+    def attempt(buffer: CharSequence, requireIncomplete: Boolean): Option[T] = {
+      def matchBoth(pattern: Regex, pf: PartialFunction[List[String], T]): Boolean =
+        pattern findFirstMatchIn buffer map { _.subgroups } collect pf isDefined
+
+      rules collectFirst {
+        case (pattern, pf) if matchBoth(pattern, pf) =>
+          pattern findFirstMatchIn buffer map { _.subgroups } collect pf get      // I hate how we have to split this...
+      }
+    }
+
+    /*
+     * Buffer up characters until we get a prefix match PLUS one character that doesn't match (this
+     * is to defeat early-completion of greedy matchers).  Once we get a prefix match that satisfies
+     * a rule in the map, emit the resulting token and flush the buffer.  Any characters that aren't
+     * matched by any rule are emitted.
+     *
+     * Note that the `tokenize` function should probably have a maxBuffer: Int parameter, or similar,
+     * since it would be possible to DoS this function by simply feeding an extremely long unmatched
+     * prefix.  Better yet, we should just knuckle-down and write a DFA compiler.  Would be a lot
+     * simpler.
+     */
+    def inner(buffer: Vector[Char]): Process1[Char, Char \/ T] = {
+      receive1Or[Char, Char \/ T](attempt(iseqAsCharSeq(buffer), false) map { \/-(_) } map emit getOrElse emitAll(buffer map { -\/(_) })) { c =>
+        val buffer2 = buffer :+ c
+        val csBuffer = iseqAsCharSeq(buffer2)
+
+        val wsMatch = whitespace flatMap { _ findPrefixOf csBuffer }
+
+        // if we matched prefix whitespace, move on with a clean buffer
+        wsMatch map { prefix =>
+          inner(buffer2 drop prefix.length)
+        } getOrElse {
+          attempt(csBuffer, true) map { \/-(_) } map { t => emit(t) ++ inner(Vector(c)) } getOrElse inner(buffer2)
+        }
+      }
+    }
+
+    inner(Vector.empty)
   }
 }
