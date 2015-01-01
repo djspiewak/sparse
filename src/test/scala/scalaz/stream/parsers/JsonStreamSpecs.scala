@@ -28,6 +28,14 @@ import scala.util.matching.Regex
  */
 object JsonStreamSpecs extends Specification {
 
+  "json lexing" should {
+    "lex an empty object literal" in {
+      val output = Process("{}": _*).toSource pipe tokenize(JsonToken.Rules) stripW
+
+      output.runLog.run mustEqual Seq(JsonToken.LBrace, JsonToken.RBrace)
+    }
+  }
+
   "json parsing" should {
     "parse the fundamental values" in {
       "object" >> {
@@ -35,6 +43,12 @@ object JsonStreamSpecs extends Specification {
 
         output.runLog.run mustEqual Seq(JsonValue.Object(Vector.empty))
       }
+    }
+
+    "parse an unmatched object literal without SOE" in {
+      val output = Process(JsonToken.LBrace, JsonToken.LBrace, JsonToken.RBrace).toSource pipe parse(value) stripW
+
+      output.runLog.run must not(throwA[StackOverflowError])
     }
   }
 
