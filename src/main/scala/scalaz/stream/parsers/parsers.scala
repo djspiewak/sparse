@@ -157,6 +157,8 @@ object Parser {
     // alias for map
     def ^^[Result2](f: Result => Result2): Parser[Token, Result2] = left map f
 
+    def ^^^[Result2](result: Result2): Parser[Token, Result2] = left map Function.const(result)
+
     def ~>[Result2](right: => Parser[Token, Result2]): Parser[Token, Result2] =
       left ~ right ^^ { (_, r) => r }
 
