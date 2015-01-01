@@ -105,7 +105,7 @@ package object parsers {
 
     def attempt(buffer: CharSequence, requireIncomplete: Boolean): Option[T] = {
       def matchBoth(pattern: Regex, pf: PartialFunction[List[String], T]): Boolean =
-        pattern findFirstMatchIn buffer map { _.subgroups } collect pf isDefined
+        pattern findFirstMatchIn buffer filter { !requireIncomplete || _.matched.length < buffer.length } map { _.subgroups } collect pf isDefined
 
       rules collectFirst {
         case (pattern, pf) if matchBoth(pattern, pf) =>
