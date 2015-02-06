@@ -1,5 +1,7 @@
 # sparse
 
+[![Join the chat at https://gitter.im/djspiewak/sparse](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/djspiewak/sparse?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 This library provides combinators for fully general (any CFG!), fully incremental parsing on top of [scalaz-stream](https://github.com/scalaz/scalaz-stream).  An example:
 
 ```scala
